@@ -1,8 +1,11 @@
+## outputs the datafrmae in parquet format, no delta lake layer
 from sparkSession import spark
 from pyspark.sql.types import StringType, StructField, IntegerType, StructType, DataType, DatetimeType, TimestampType, DoubleType
 from pyspark.sql import functions as F
 
 import shutil
+
+
 
 ## defining json's structures
 json_schema = StructType([
@@ -23,38 +26,17 @@ json_schema = StructType([
 file_path = '/Users/ayusman/thisWorks/DE/lakehouse_analytics/data/streaming/'
 dataframe = spark.readStream.json(file_path, schema=json_schema)
 
+## adding 2 columns, input filename and ingestion timestamp to the dataframe
+dataframe = dataframe.withColumn('ip_filename', F.input_file_name()).withColumn('ingestion_ts', F.current_timestamp())
 
-## add input filename and ingestin timestamp
-dataframe = dataframe.withColumn('file_name', F.input_file_name())\
-            .withColumn('ingestin_ts', F.current_timestamp())
-
-
-## output in console to check the dataframe
-query = dataframe.writeStream.format('console').outputMode('Append')\
+## write stream to write into a parquet file format
+query = dataframe.writeStream.format('parquet').outputMode('append')\
         .option('checkpointLocation', './spark_checkpoints')\
-        .trigger(once=True).start()\
-# .trigger(once=True) stops the query after execution
+        .option('path', 'parquet_op')\
+        .trigger(availableNow=True).start()
+
 query.awaitTermination()
 
-## clears the checkpoint so that the second query sees data has not been processed yet writes
-## without this checkpoint clear step, we could use a different checkpoint
+
+## removing the existing checkpoints
 shutil.rmtree('./spark_checkpoints', ignore_errors=True)
-
-## output in delta format
-query2 = dataframe.writeStream.format('delta').outputMode('append')\
-        .option('checkpointLocation', './spark_checkpoints')\
-        .trigger(availableNow=True)\
-        .start('./delta/bronze')
-
-query2.awaitTermination()
-shutil.rmtree('./spark_checkpoints', ignore_errors=True)
-
-## removes the created delta parquet files
-##shutil.rmtree('./delta/bronze', ignore_errors=True)
-
-## keeps the script alive
-##query.stop()
-
-
-
-

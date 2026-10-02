@@ -1,3 +1,5 @@
 myvenv/
 data/
 __pycache__
+spark_checkpoints/
+parquet_op/

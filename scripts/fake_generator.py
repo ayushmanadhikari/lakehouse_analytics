@@ -8,11 +8,11 @@ BASE_DIR = Path.cwd()
 OUTPUT_DIR = BASE_DIR / "data" / "streaming"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-NUM_FILES = 5
-MIN_RECORDS_PER_FILE = 10_000
-MAX_RECORDS_PER_FILE = 15_000
-NUM_USERS = 5_000      # scaled up so ~28k sessions don't reuse 300 users constantly
-NUM_PRODUCTS = 200
+NUM_FILES = 1
+MIN_RECORDS_PER_FILE = 10_00
+MAX_RECORDS_PER_FILE = 15_00
+NUM_USERS = 5_00     # scaled up so ~28k sessions don't reuse 300 users constantly
+NUM_PRODUCTS = 20
 
 PRODUCT_CATEGORIES = [
     "pain_relief", "vitamins", "skin_care", "baby_care",
