@@ -1,5 +1,13 @@
 
 from pyspark.sql import SparkSession
+import os
+import sys
+
+# Forces both worker nodes and driver to use the exact virtual environment Python path
+os.environ["PYSPARK_PYTHON"] = sys.executable
+os.environ["PYSPARK_DRIVER_PYTHON"] = sys.executable
+
+from pyspark.sql import SparkSession
 
 
 spark = SparkSession.builder.appName('Spark Streaming session')\
