@@ -2,4 +2,8 @@ myvenv/
 data/
 __pycache__
 spark_checkpoints/
-parquet_op/
+delta/
+scripts/
+spark-warehouse/
+lakehouse/
+*.ipynb_checkpoints/
