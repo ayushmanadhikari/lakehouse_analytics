@@ -141,12 +141,37 @@ def create_user_df(dataframe):
 
 def create_date_df(dataframe):
     df_time = dataframe.withColumn('event_time', to_timestamp('event_time', "yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX"))
-    pass
+    df_time = df_time.select('event_time')
+    df_time = df_time.withColumns({
+        'full_date': to_date('event_time', 'yyyy-MM-dd'),
+        'year': year(to_date('full_date')),
+        'quarter': quarter(to_date('full_date')),
+        'month': month(to_date('full_date')),
+        'monthname': monthname(to_date('full_date')),
+        'weekyear': weekofyear(to_date('full_date')),
+        'weekday': weekday(to_date('full_date')),
+        'dayname': dayname(to_date('full_date')),
+        'day': day(to_date('full_date')),
+        'is_weekend': when(col('weekday').isin('5', '6'), True).otherwise(False),
+    })
+    return df_time
 
 def create_product_df(dataframe):
     # creates product_df to be inserted into dim_product
     pass 
 
+silver_date_schema = StructType([
+    StructField("date_key",     IntegerType(),   nullable=False),  # yyyyMMdd
+    StructField("full_date",    DateType(),      nullable=False),
+    StructField("year",         IntegerType(),   nullable=False),
+    StructField("quarter",      IntegerType(),   nullable=False),
+    StructField("month",        IntegerType(),   nullable=False),
+    StructField("monthname",    StringType(),   nullable=False),
+    StructField("week",         StringType(),   nullable=False),
+    StructField("weekday",         StringType(),   nullable=False),
+    StructField("day",          IntegerType(),   nullable=False),
+    StructField("is_weekend",   BooleanType(),   nullable=True),
+])
 
 def main():
     '''df = trim_everything_lower(dataframe_clickstream)
@@ -156,8 +181,10 @@ def main():
     df.printSchema()
     df = type_conversion(df)
     df.printSchema() '''
-    df = create_user_df(dataframe_user)
-    df.show()
+    #df = create_user_df(dataframe_user)
+    df = create_date_df(dataframe_clickstream)
+    df.printSchema()
+    df.show(5, truncate=False)
 
 
 if __name__ == '__main__':
