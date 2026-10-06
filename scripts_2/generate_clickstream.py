@@ -292,7 +292,7 @@ def generate_clickstream():
             print(f"   anomaly {name}: {c}")
 
     print(f"Total events written: {total_written:,} across {NUM_FILES} files "
-          f"({session_number:,} sessions)")
+        f"({session_number:,} sessions)")
 
 
 if __name__ == "__main__":

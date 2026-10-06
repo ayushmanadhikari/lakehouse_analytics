@@ -1,6 +1,6 @@
 from sparkSession import spark
 from pyspark.sql.functions import *
-from silver_schema_def import schema_silver_quarantined
+from silver_schema_def import fact_events_schema, dim_user_schema, dim_product_schema, silver_date_schema
 from pyspark.sql.types import *
 
 ## readpaths 
@@ -9,9 +9,9 @@ READ_PATH_USER = '/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehouse/bron
 
 ## tables for silver layer schema 
 ##1. silver_events
-##2. silver_events_quarantine
-##3. silver_dim_customer
-##4. silver_dim_products
+##2. silver_dim_customer
+    #- user_id 
+##3. silver_dim_products
 
 ## reading from the delta lake of bronze layer
 dataframe_clickstream = spark.read.format('delta').load(READ_PATH_CLICKSTREAM)
@@ -37,6 +37,7 @@ def filter_future_events(dataframe):
     df_ts = df_ts.filter(col('event_time') <= current_timestamp())
     return df_ts
 
+
 ## user_id rows, null product_id, (quantity rows for event_type purchase, add_to_cart and checkout)
 def handle_nulls(dataframe):
     # checking null counts accross all columns
@@ -58,23 +59,6 @@ def handle_nulls(dataframe):
 
 ## converts the schema type of all string schema to specfic types
 def type_conversion(dataframe):
-    schema1 = StructType([
-    StructField('category', StringType(), nullable=True),
-    StructField('country', StringType(), nullable=True),
-    StructField('device', StringType(), nullable=True),
-    StructField('event_id', StringType(), nullable=False),
-    StructField('event_time', TimestampType(), nullable=False),
-    StructField('event_type', StringType(), nullable=True),
-    StructField('price', DoubleType(), nullable=True),
-    StructField('product_id', StringType(), nullable=True),
-    StructField('quantity', IntegerType(), nullable=True),
-    StructField('session_id', StringType(), nullable=False),
-    StructField('user_id', StringType(), nullable=False),
-    StructField('ingestion_ts', TimestampType(), nullable=True),
-    StructField('ip_file_name', StringType(), nullable=True),
-    ])
-
-
     ## this is done to ensure that no nulls value remain in these columns before converting them to nullable=False property
     ## even if the null count is 0, it is safer to use coalesce anyways before changing nullable property of a column
     df = dataframe.withColumns({'user_id': coalesce('user_id', lit('unkonwn')),
@@ -85,7 +69,7 @@ def type_conversion(dataframe):
     df = df.withColumn('event_time', to_timestamp(col('event_time'), "yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX"))
 
     try:
-        df = df.to(schema=schema1)
+        df = df.to(schema=fact_events_schema)      #does the actualy conversion but do not forget to coalesce to change nullable before passing the StructType object to (.to()) method or else it will break
         return df
     except Exception as e:
         print(f'error: {e}')
