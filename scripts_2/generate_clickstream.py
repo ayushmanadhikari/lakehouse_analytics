@@ -6,12 +6,12 @@ Outputs (under ./data/streaming):
   users_<run_id>.json            -> user profile change feed (NDJSON) for an SCD2 dim_user
 
 Injected anomalies in the clickstream (to be fixed in the silver layer):
-  1. NULL user_id / product_id          -> drop rows (cannot be joined / attributed)
-  2. NULL device / country / category   -> fill ("unknown") or backfill from dimensions
-  3. Duplicate events (same event_id)   -> dedupe on event_id
-  4. Invalid quantity on cart/checkout/purchase events (null, 0, negative) -> drop or quarantine
-  5. Future-dated event_time            -> filter event_time > ingestion time
-  6. Dirty strings in event_type/device (casing, whitespace) -> trim + lower
+  1. NULL user_id / product_id          -> drop rows (cannot be joined / attributed) >>done
+  2. NULL device / country / category   -> fill ("unknown") or backfill from dimensions >>done
+  3. Duplicate events (same event_id)   -> dedupe on event_id >>done
+  4. Invalid quantity on cart/checkout/purchase events (null, 0, negative) -> drop or quarantine >> removed negative quant everywhere, null for specified event_types
+  5. Future-dated event_time            -> filter event_time > ingestion time >> done
+  6. Dirty strings in event_type/device (casing, whitespace) -> trim + lower >> done
 
 SCD2 tracked attributes (users feed): country, loyalty_tier
   Each user has an initial record plus 0-3 later changes, each with its own updated_at.
