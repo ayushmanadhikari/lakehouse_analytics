@@ -2,10 +2,13 @@ from sparkSession import spark
 from pyspark.sql.functions import *
 from silver_schema_def import fact_events_schema, dim_user_schema, dim_product_schema, silver_date_schema
 from pyspark.sql.types import *
+from pyspark.sql import Window
 
 ## readpaths 
 READ_PATH_CLICKSTREAM = '/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehouse/bronze/bronze_clickstream'
 READ_PATH_USER = '/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehouse/bronze/bronze_user'
+
+
 
 ## tables for silver layer schema 
 ##1. silver_events
@@ -13,10 +16,27 @@ READ_PATH_USER = '/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehouse/bron
     #- user_id 
 ##3. silver_dim_products
 
-## reading from the delta lake of bronze layer
+## reading from the delta lake of bronze layer events data and user data
 dataframe_clickstream = spark.read.format('delta').load(READ_PATH_CLICKSTREAM)
 dataframe_user = spark.read.format('delta').load(READ_PATH_USER)
 
+
+## defining the final structure for events dataframe
+events_schema = StructType([
+    StructField('category', StringType(), nullable=True),
+    StructField('country', StringType(), nullable=True),
+    StructField('device', StringType(), nullable=True),
+    StructField('event_id', StringType(), nullable=False),
+    StructField('event_time', TimestampType(), nullable=False),
+    StructField('event_type', StringType(), nullable=True),
+    StructField('price', DoubleType(), nullable=True),
+    StructField('product_id', StringType(), nullable=True),
+    StructField('quantity', IntegerType(), nullable=True),
+    StructField('session_id', StringType(), nullable=False),
+    StructField('user_id', StringType(), nullable=False),
+    StructField('ingestion_ts', TimestampType(), nullable=True),
+    StructField('ip_file_name', StringType(), nullable=True),
+    ])
 
 # uses dictionary comprehension to trim and lower case every string in the dataframe
 def trim_everything_lower(dataframe):
@@ -25,8 +45,8 @@ def trim_everything_lower(dataframe):
 
 
 ## ensures unique value on event id to ensure no duplicate clickstream entries
-def ensure_unique(dataframe):
-    df_unique = dataframe.dropDuplicates(subset=['event_id'])
+def ensure_unique(dataframe, *fields):
+    df_unique = dataframe.dropDuplicates(subset=fields)
     return df_unique
 
 
@@ -69,21 +89,75 @@ def type_conversion(dataframe):
     df = df.withColumn('event_time', to_timestamp(col('event_time'), "yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX"))
 
     try:
-        df = df.to(schema=fact_events_schema)      #does the actualy conversion but do not forget to coalesce to change nullable before passing the StructType object to (.to()) method or else it will break
+        df = df.to(schema=events_schema)      #does the actualy conversion but do not forget to coalesce to change nullable before passing the StructType object to (.to()) method or else it will break
         return df
     except Exception as e:
         print(f'error: {e}')
 
 
+def create_user_df(dataframe):
+    df_user = trim_everything_lower(dataframe)
+    
+    # defining window spec
+    window_spec_latest_user = Window.partitionBy('user_id').orderBy(col('updated_at').desc())
+    ## using this window spec with rank function
+    df_latest_user = df_user.withColumn('ranks', rank().over(window_spec_latest_user))
+
+    ## adding is_current flag, so latest record show True and old ones false
+    df_latest_user = df_latest_user.withColumn('is_current', when(col('ranks') == 1, True).otherwise(False))
+
+    df_latest_user = df_latest_user.withColumnRenamed('signup_date', 'effective_from').withColumnRenamed('updated_at', 'effective_to')
+    
+    df_latest_user = df_latest_user.select('user_id', 'country', 'effective_from', 'effective_to', 'is_current')
+    ## type conversion
+    ## defining schema
+    user_schema = StructType([
+        StructField('user_id', StringType(), False),
+        StructField('country', StringType(), True),
+        StructField('effective_from', DateType(), False),
+        StructField('effective_to', TimestampType(), True),
+        StructField('is_current', BooleanType(), True)
+    ])
+    
+    ## coalescing not-null fields for precaution without date/datetime casting
+    df_latest_user = df_latest_user.withColumns({
+        'user_id': coalesce(col('user_id'), lit('unknown')),
+        'effective_from': coalesce(upper(col('effective_from')), lit('1970-01-01')),
+        'effective_to': coalesce(upper(col('effective_to')), lit("9999-12-31 23:59:00"))
+    })
+
+    ##changing type for date columns
+    df_latest_user = df_latest_user.withColumns({
+        'effective_from': to_date('effective_from', 'yyyy-MM-dd'),
+        'effective_to': to_timestamp('effective_to', "yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX")
+    })
+
+    try:
+        df_latest_user = df_latest_user.to(user_schema)
+    except Exception as e:
+        raise('error: '+ str(e))
+    return df_latest_user
+
+
+def create_date_df(dataframe):
+    df_time = dataframe.withColumn('event_time', to_timestamp('event_time', "yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX"))
+    pass
+
+def create_product_df(dataframe):
+    # creates product_df to be inserted into dim_product
+    pass 
+
 
 def main():
-    df = trim_everything_lower(dataframe_clickstream)
-    df = ensure_unique(df)
+    '''df = trim_everything_lower(dataframe_clickstream)
+    df = ensure_unique(df, 'event_id')
     df = handle_nulls(dataframe_clickstream)
     df = filter_future_events(df)
     df.printSchema()
     df = type_conversion(df)
-    df.printSchema()
+    df.printSchema() '''
+    df = create_user_df(dataframe_user)
+    df.show()
 
 
 if __name__ == '__main__':

@@ -37,8 +37,8 @@ OUTPUT_DIR_USER = BASE_DIR / "data" / "users"
 OUTPUT_DIR_USER.mkdir(parents=True, exist_ok=True)
 
 NUM_FILES = 1
-MIN_RECORDS_PER_FILE = 1_000
-MAX_RECORDS_PER_FILE = 1_500
+MIN_RECORDS_PER_FILE = 1_0000
+MAX_RECORDS_PER_FILE = 1_5000
 NUM_USERS = 200               # small enough that each user has several sessions + history
 NUM_PRODUCTS = 20
 WINDOW_DAYS = 30              # events and user changes are spread over this window

@@ -60,6 +60,6 @@ silver_date_schema = StructType([
     StructField("month",        IntegerType(),   nullable=False),
     StructField("day",          IntegerType(),   nullable=False),
     StructField("day_of_week",  IntegerType(),   nullable=False),
-    StructField("is_weekend",   BooleanType(),   nullable=False),
+    StructField("is_weekend",   BooleanType(),   nullable=True),
 ])
 
