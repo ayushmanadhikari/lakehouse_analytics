@@ -4,10 +4,15 @@ from silver_schema_def import fact_events_schema, dim_user_schema, dim_product_s
 from pyspark.sql.types import *
 from pyspark.sql import Window
 import datetime
+from datetime import datetime as dt
 
 ## readpaths 
 READ_PATH_CLICKSTREAM = '/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehouse/bronze/bronze_clickstream'
 READ_PATH_USER = '/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehouse/bronze/bronze_user'
+
+#DEFAULT_TIMESTAMP = dt.strptime()
+
+DEFAULT_TIMESTAMP = dt(1970, 1, 1, 0, 0, 0, 0, tzinfo=datetime.timezone.utc)
 
 
 ## tables for silver layer schema 
@@ -80,19 +85,35 @@ def handle_nulls(dataframe):
 ## converts the schema type of all string schema to specfic types
 def type_conversion(dataframe):
     ## this is done to ensure that no nulls value remain in these columns before converting them to nullable=False property
-    ## even if the null count is 0, it is safer to use coalesce anyways before changing nullable property of a column
+    ## even if the null count is 0, it is safer to use coalesce anyways before changing nullable property of a column, with the same datatype lit as default value
     df = dataframe.withColumns({'user_id': coalesce('user_id', lit('unkonwn')),
                 'event_id': coalesce('event_id', lit('unkonwn')),
                 'event_time': coalesce('event_time', lit('unkonwn')),
-                'session_id': coalesce('session_id', lit('unknown'))
+                'session_id': coalesce('session_id', lit('unknown')),
+                'price': coalesce('price', lit('unkown'))
                 })
-    df = df.withColumn('event_time', to_timestamp(col('event_time'), "yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX"))
-
+    df = df.withColumn('event_time', coalesce(to_timestamp(col('event_time'), "yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX"), lit(DEFAULT_TIMESTAMP)))
+    df = df.withColumns({
+        'price': col('price').cast('double'),
+        'quantity': col('quantity').cast('int'),
+        'ingestion_ts': col('ingestion_ts').cast('timestamp')
+        })
     try:
         df = df.to(schema=events_schema)      #does the actualy conversion but do not forget to coalesce to change nullable before passing the StructType object to (.to()) method or else it will break
         return df
     except Exception as e:
         print(f'error: {e}')
+        print('done')
+
+
+def create_event_df(dataframe):
+    df = trim_everything_lower(dataframe)
+    df = ensure_unique(df, 'event_id')
+    df = handle_nulls(df)
+    df = filter_future_events(df)
+    df = type_conversion(df)
+
+    return df
 
 
 def create_user_df(dataframe):
@@ -169,7 +190,7 @@ def create_date_df(dataframe):
     date_default = lit(datetime.date(1970, 1, 1))
     df_time = df_time.withColumn('full_date', coalesce(col('full_date'), date_default))
     
-    
+    # do not re type cast full_date into date type, this again allows nulls. so it would break nullable=False, which is True to this point
     df_time = df_time.withColumns({
         'year': year(to_date('full_date')),
         'quarter': quarter(to_date('full_date')),
@@ -195,7 +216,7 @@ def create_product_df(dataframe):
     ])
 
     df_product = dataframe.select('product_id', 'category', 'event_time')
-    timestamp_default = lit(datetime.now())
+    timestamp_default = lit(dt.now())
 
     df_product = df_product.withColumns({
         'product_id': coalesce(col('product_id'), lit('unknown')),
@@ -207,19 +228,13 @@ def create_product_df(dataframe):
     return df_product
 
 
-def main():
-    '''df = trim_everything_lower(dataframe_clickstream)
-    df = ensure_unique(df, 'event_id')
-    df = handle_nulls(dataframe_clickstream)
-    df = filter_future_events(df)
-    df.printSchema()
-    df = type_conversion(df)
-    df.printSchema() '''
-    #df = create_user_df(dataframe_user)
-    df = create_date_df(dataframe_clickstream)
-    df.printSchema()
-    df.show(5, truncate=False)
 
+def main():
+    df_event = create_event_df(dataframe_clickstream)
+    df_user = create_user_df(dataframe_user)
+    df_time = create_date_df(dataframe_clickstream)
+    df_product = create_product_df(dataframe_clickstream)
+    
 
 if __name__ == '__main__':
     main()

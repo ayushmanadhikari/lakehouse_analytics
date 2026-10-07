@@ -52,14 +52,17 @@ dim_product_schema = StructType([
 ])
 
 
+
 silver_date_schema = StructType([
-    StructField("date_key",     IntegerType(),   nullable=False),  # yyyyMMdd
+    StructField("date_key",     IntegerType(),   nullable=False),  
     StructField("full_date",    DateType(),      nullable=False),
-    StructField("year",         IntegerType(),   nullable=False),
-    StructField("quarter",      IntegerType(),   nullable=False),
-    StructField("month",        IntegerType(),   nullable=False),
-    StructField("day",          IntegerType(),   nullable=False),
-    StructField("day_of_week",  IntegerType(),   nullable=False),
+    StructField("year",         IntegerType(),   nullable=True),
+    StructField("quarter",      IntegerType(),   nullable=True),
+    StructField("month",        IntegerType(),   nullable=True),
+    StructField("monthname",    StringType(),   nullable=True),
+    StructField("weekyear",     StringType(),   nullable=True),
+    StructField("weekday",      StringType(),   nullable=True),
+    StructField("dayname",      StringType(),   nullable=True),    
+    StructField("day",          IntegerType(),   nullable=True),
     StructField("is_weekend",   BooleanType(),   nullable=True),
 ])
-
