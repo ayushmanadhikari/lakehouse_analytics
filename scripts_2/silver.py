@@ -10,7 +10,6 @@ READ_PATH_CLICKSTREAM = '/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehou
 READ_PATH_USER = '/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehouse/bronze/bronze_user'
 
 
-
 ## tables for silver layer schema 
 ##1. silver_events
 ##2. silver_dim_customer
@@ -189,8 +188,23 @@ def create_date_df(dataframe):
 
 
 def create_product_df(dataframe):
-    # creates product_df to be inserted into dim_product
-    pass 
+    dim_product_schema = StructType([
+    StructField("product_id",   StringType(),    nullable=False),  # natural key
+    StructField("category",     StringType(),    nullable=True),
+    StructField("updated_ts",   TimestampType(), nullable=False),
+    ])
+
+    df_product = dataframe.select('product_id', 'category', 'event_time')
+    timestamp_default = lit(datetime.now())
+
+    df_product = df_product.withColumns({
+        'product_id': coalesce(col('product_id'), lit('unknown')),
+        'category': col('category'),
+        'updated_ts': coalesce(to_timestamp(col('event_time'), "yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX"), timestamp_default)
+    })
+
+    df_product = df_product.to(dim_product_schema)
+    return df_product
 
 
 def main():
