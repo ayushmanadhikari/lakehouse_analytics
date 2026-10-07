@@ -3,6 +3,7 @@ from pyspark.sql.functions import *
 from silver_schema_def import fact_events_schema, dim_user_schema, dim_product_schema, silver_date_schema
 from pyspark.sql.types import *
 from pyspark.sql import Window
+import datetime
 
 ## readpaths 
 READ_PATH_CLICKSTREAM = '/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehouse/bronze/bronze_clickstream'
@@ -139,11 +140,38 @@ def create_user_df(dataframe):
     return df_latest_user
 
 
+### NOTE:
+## converting a nullable = True field to nullable = False is a hassle when you also need to perform type casting from string to other type. 
+# Properly follow the following steps:
+# 1. typecasting: convert the string data type to the required data type first, in this case string(containing timestamp) is first converted into timestamp type then date type.
+# Remember to provide the matching pattern of timestamp and date while type casting
+#2. Coalesce with a default value of the same type so that catalyst otpimizer can evaluate that field to contain no null values
+# while coalescing you must keep in mind to provide the default value to be the same datatype as the source column. You cannot use .cast("date") in this step.
+# This is because, casting a string to any other type is marked as possibly nullable because the parse can fail. 
+# Use a real Python date literal, which creates a non-null DateType literal directly:
 def create_date_df(dataframe):
-    df_time = dataframe.withColumn('event_time', to_timestamp('event_time', "yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX"))
-    df_time = df_time.select('event_time')
+    silver_date_schema = StructType([
+    StructField("full_date",    DateType(),      nullable=False),
+    StructField("year",         IntegerType(),   nullable=True),
+    StructField("quarter",      IntegerType(),   nullable=True),
+    StructField("month",        IntegerType(),   nullable=True),
+    StructField("monthname",    StringType(),   nullable=True),
+    StructField("weekyear",     StringType(),   nullable=True),
+    StructField("weekday",      StringType(),   nullable=True),
+    StructField("dayname",      StringType(),   nullable=True),    
+    StructField("day",          IntegerType(),   nullable=True),
+    StructField("is_weekend",   BooleanType(),   nullable=False),
+])
+    # type coversion for full_Date to dateType from stringtype of eventtype(first to timestamp then to date)
+    df_time = dataframe.select('event_time')
+    df_time = df_time.withColumn('full_date', to_timestamp(col('event_time'), "yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX").cast("date"))
+
+    # since casting string to anyother type marks it as nullable, we will be using datetype object itself and then coalescing to drop nullable property
+    date_default = lit(datetime.date(1970, 1, 1))
+    df_time = df_time.withColumn('full_date', coalesce(col('full_date'), date_default))
+    
+    
     df_time = df_time.withColumns({
-        'full_date': to_date('event_time', 'yyyy-MM-dd'),
         'year': year(to_date('full_date')),
         'quarter': quarter(to_date('full_date')),
         'month': month(to_date('full_date')),
@@ -154,24 +182,16 @@ def create_date_df(dataframe):
         'day': day(to_date('full_date')),
         'is_weekend': when(col('weekday').isin('5', '6'), True).otherwise(False),
     })
+
+    df_time = df_time.select('full_date','year', 'quarter', 'month', 'monthname', 'weekyear', 'weekday', 'dayname', 'day', 'is_weekend')
+    df_time = df_time.to(silver_date_schema)
     return df_time
+
 
 def create_product_df(dataframe):
     # creates product_df to be inserted into dim_product
     pass 
 
-silver_date_schema = StructType([
-    StructField("date_key",     IntegerType(),   nullable=False),  # yyyyMMdd
-    StructField("full_date",    DateType(),      nullable=False),
-    StructField("year",         IntegerType(),   nullable=False),
-    StructField("quarter",      IntegerType(),   nullable=False),
-    StructField("month",        IntegerType(),   nullable=False),
-    StructField("monthname",    StringType(),   nullable=False),
-    StructField("week",         StringType(),   nullable=False),
-    StructField("weekday",         StringType(),   nullable=False),
-    StructField("day",          IntegerType(),   nullable=False),
-    StructField("is_weekend",   BooleanType(),   nullable=True),
-])
 
 def main():
     '''df = trim_everything_lower(dataframe_clickstream)
