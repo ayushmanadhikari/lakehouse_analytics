@@ -233,17 +233,17 @@ def create_product_df(dataframe):
 
 
 def main():
-    #df_event = create_event_df(dataframe_clickstream)
+    df_event = create_event_df(dataframe_clickstream)
     df_user = create_user_df(dataframe_user)
-    #df_time = create_date_df(dataframe_clickstream)
-    #df_product = create_product_df(dataframe_clickstream)
+    df_date = create_date_df(dataframe_clickstream)
+    df_product = create_product_df(dataframe_clickstream)
 
-    #df_event.show(3)
-    df_user.show(3)
-    #df_time.show(3)
+    df_event.show(3)
+    #df_user.show(3)
+    #df_date.show(3)
     #df_product.show(3)
 
-    write_silver_user(df_user)
+    #write_silver_user(df_user)
     
 
 if __name__ == '__main__':
