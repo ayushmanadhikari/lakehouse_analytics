@@ -7,3 +7,4 @@ scripts/
 spark-warehouse/
 lakehouse/
 *.ipynb_checkpoints/
+delta_tests.py

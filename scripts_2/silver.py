@@ -1,19 +1,21 @@
 from sparkSession import spark
 from pyspark.sql.functions import *
-from silver_schema_def import fact_events_schema, dim_user_schema, dim_product_schema, silver_date_schema
 from pyspark.sql.types import *
 from pyspark.sql import Window
 import datetime
 from datetime import datetime as dt
+from lr_delta import *
+
 
 ## readpaths 
 READ_PATH_CLICKSTREAM = '/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehouse/bronze/bronze_clickstream'
 READ_PATH_USER = '/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehouse/bronze/bronze_user'
 
-#DEFAULT_TIMESTAMP = dt.strptime()
+## WRITEPATHS
+WRITE_PATH_USER = '/Users/ayusman/thisWorks/DE/lakehouse_analytics/spark-warehouse/silver/silver_user'
 
 DEFAULT_TIMESTAMP = dt(1970, 1, 1, 0, 0, 0, 0, tzinfo=datetime.timezone.utc)
-
+DATE_DEFAULT = lit(datetime.date(1970, 1, 1))
 
 ## tables for silver layer schema 
 ##1. silver_events
@@ -33,6 +35,7 @@ events_schema = StructType([
     StructField('device', StringType(), nullable=True),
     StructField('event_id', StringType(), nullable=False),
     StructField('event_time', TimestampType(), nullable=False),
+    StructField('event_date', DateType(), nullable=True),
     StructField('event_type', StringType(), nullable=True),
     StructField('price', DoubleType(), nullable=True),
     StructField('product_id', StringType(), nullable=True),
@@ -89,6 +92,7 @@ def type_conversion(dataframe):
     df = dataframe.withColumns({'user_id': coalesce('user_id', lit('unkonwn')),
                 'event_id': coalesce('event_id', lit('unkonwn')),
                 'event_time': coalesce('event_time', lit('unkonwn')),
+                'event_date': coalesce(to_date(col('event_time'), "yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX"), lit(DATE_DEFAULT)),
                 'session_id': coalesce('session_id', lit('unknown')),
                 'price': coalesce('price', lit('unkown'))
                 })
@@ -187,8 +191,8 @@ def create_date_df(dataframe):
     df_time = df_time.withColumn('full_date', to_timestamp(col('event_time'), "yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX").cast("date"))
 
     # since casting string to anyother type marks it as nullable, we will be using datetype object itself and then coalescing to drop nullable property
-    date_default = lit(datetime.date(1970, 1, 1))
-    df_time = df_time.withColumn('full_date', coalesce(col('full_date'), date_default))
+    
+    df_time = df_time.withColumn('full_date', coalesce(col('full_date'), DATE_DEFAULT))
     
     # do not re type cast full_date into date type, this again allows nulls. so it would break nullable=False, which is True to this point
     df_time = df_time.withColumns({
@@ -203,7 +207,7 @@ def create_date_df(dataframe):
         'is_weekend': when(col('weekday').isin('5', '6'), True).otherwise(False),
     })
 
-    df_time = df_time.select('full_date','year', 'quarter', 'month', 'monthname', 'weekyear', 'weekday', 'dayname', 'day', 'is_weekend')
+    df_time = df_time.select('full_date','year', 'quarter', 'month', 'monthname', 'weekyear', 'weekday', 'dayname', 'day', 'is_weekend').distinct()
     df_time = df_time.to(silver_date_schema)
     return df_time
 
@@ -215,7 +219,7 @@ def create_product_df(dataframe):
     StructField("updated_ts",   TimestampType(), nullable=False),
     ])
 
-    df_product = dataframe.select('product_id', 'category', 'event_time')
+    df_product = dataframe.select('product_id', 'category', 'event_time').distinct()
     timestamp_default = lit(dt.now())
 
     df_product = df_product.withColumns({
@@ -228,12 +232,18 @@ def create_product_df(dataframe):
     return df_product
 
 
-
 def main():
-    df_event = create_event_df(dataframe_clickstream)
+    #df_event = create_event_df(dataframe_clickstream)
     df_user = create_user_df(dataframe_user)
-    df_time = create_date_df(dataframe_clickstream)
-    df_product = create_product_df(dataframe_clickstream)
+    #df_time = create_date_df(dataframe_clickstream)
+    #df_product = create_product_df(dataframe_clickstream)
+
+    #df_event.show(3)
+    df_user.show(3)
+    #df_time.show(3)
+    #df_product.show(3)
+
+    write_silver_user(df_user)
     
 
 if __name__ == '__main__':

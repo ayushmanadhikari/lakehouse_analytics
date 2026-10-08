@@ -16,8 +16,7 @@ builder = SparkSession.builder.appName('Spark Streaming session')\
         .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
         .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
         .config("spark.sql.streaming.forceDeleteTempCheckpointLocation", "true")\
-        .config("spark.databricks.delta.identityColumn.enabled", "true")\
-        .config("spark.sql.warehouse.dir", "./spark-warehouse")
+        .getOrCreate()
 
 
 
