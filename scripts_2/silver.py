@@ -7,12 +7,15 @@ from datetime import datetime as dt
 from lr_delta import *
 
 
-## readpaths 
+## readpaths from bronze layer
 READ_PATH_CLICKSTREAM = '/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehouse/bronze/bronze_clickstream'
 READ_PATH_USER = '/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehouse/bronze/bronze_user'
 
-## WRITEPATHS
-WRITE_PATH_USER = '/Users/ayusman/thisWorks/DE/lakehouse_analytics/spark-warehouse/silver/silver_user'
+## readpaths from silver layer. needs these paths while joining with fact table to get the surrogate keys generated during insertion
+READ_PATH_USER_SILVER = '/Users/ayusman/thisWorks/DE/lakehouse_analytics/spark-warehouse/silver.db/silver_user'
+READ_PATH_DATE_SILVER = '/Users/ayusman/thisWorks/DE/lakehouse_analytics/spark-warehouse/silver.db/silver_date'
+READ_PATH_PRODUCT_SILVER = '/Users/ayusman/thisWorks/DE/lakehouse_analytics/spark-warehouse/silver.db/silver_product'
+
 
 DEFAULT_TIMESTAMP = dt(1970, 1, 1, 0, 0, 0, 0, tzinfo=datetime.timezone.utc)
 DATE_DEFAULT = lit(datetime.date(1970, 1, 1))
@@ -116,23 +119,49 @@ def create_event_df(dataframe):
     df = handle_nulls(df)
     df = filter_future_events(df)
     df = type_conversion(df)
-
     return df
+
+## prearing the event_df by joining and applying foregin key constraints to make it write ready
+## since we will be using the surrogate keys from the dimension tables, we cannot use left_semi, so we will use left join, select required columns only and use fallback to address any missing dimension entries
+def create_event_table(df_event):
+    df_user = spark.read.format('delta').load(READ_PATH_USER_SILVER)
+    df_date = spark.read.format('delta').load(READ_PATH_DATE_SILVER)
+    df_product = spark.read.format('delta').load(READ_PATH_PRODUCT_SILVER)
+
+    df_user.show(5)
+    print(df_user.count())
+    df_date.show(5)
+    print(df_date.count())
+    df_product.show(5)
+    print(df_product.count())
+
+    
+    # using left join to return even the non-matching rows and using coalesce on the surrogate key column to populate -1 in missing cases
+    df_event = df_event.join(broadcast(df_user), on='user_id', how='left')\
+                        .join(broadcast(df_date), df_event.event_date == df_date.full_date, how='left')\
+                        .join(broadcast(df_product), on='product_id', how='left')
+    df_event = df_event.withColumns({
+        'user_sk': coalesce(col('user_sk'), lit('-1')),
+        'date_key': coalesce(col('date_key'), lit('-1')),
+        'product_sk': coalesce(col('product_sk'), lit('-1'))
+    })
+    df_event = df_event.select('event_id', 'event_time', 'event_date', 'event_type', 'session_id', 'device', 'price', 'quantity', 'ingestion_ts', 'ip_file_name', 'user_sk', 'product_sk', 'date_key')
+    df_event.show(5)
+    print(df_event.count())
+    return df_event
+    
+    
 
 
 def create_user_df(dataframe):
     df_user = trim_everything_lower(dataframe)
-    
     # defining window spec
     window_spec_latest_user = Window.partitionBy('user_id').orderBy(col('updated_at').desc())
     ## using this window spec with rank function
     df_latest_user = df_user.withColumn('ranks', rank().over(window_spec_latest_user))
-
     ## adding is_current flag, so latest record show True and old ones false
     df_latest_user = df_latest_user.withColumn('is_current', when(col('ranks') == 1, True).otherwise(False))
-
     df_latest_user = df_latest_user.withColumnRenamed('signup_date', 'effective_from').withColumnRenamed('updated_at', 'effective_to')
-    
     df_latest_user = df_latest_user.select('user_id', 'country', 'effective_from', 'effective_to', 'is_current')
     ## type conversion
     ## defining schema
@@ -157,6 +186,8 @@ def create_user_df(dataframe):
         'effective_to': to_timestamp('effective_to', "yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX")
     })
 
+    df_latest_user = df_latest_user.dropDuplicates(subset=['user_id', 'effective_from', 'effective_to'])
+
     try:
         df_latest_user = df_latest_user.to(user_schema)
     except Exception as e:
@@ -180,7 +211,7 @@ def create_date_df(dataframe):
     StructField("quarter",      IntegerType(),   nullable=True),
     StructField("month",        IntegerType(),   nullable=True),
     StructField("monthname",    StringType(),   nullable=True),
-    StructField("weekyear",     StringType(),   nullable=True),
+    StructField("weekyear",     IntegerType(),   nullable=True),
     StructField("weekday",      StringType(),   nullable=True),
     StructField("dayname",      StringType(),   nullable=True),    
     StructField("day",          IntegerType(),   nullable=True),
@@ -208,6 +239,7 @@ def create_date_df(dataframe):
     })
 
     df_time = df_time.select('full_date','year', 'quarter', 'month', 'monthname', 'weekyear', 'weekday', 'dayname', 'day', 'is_weekend').distinct()
+    df_time = df_time.dropDuplicates(subset=['full_date'])
     df_time = df_time.to(silver_date_schema)
     return df_time
 
@@ -228,23 +260,38 @@ def create_product_df(dataframe):
         'updated_ts': coalesce(to_timestamp(col('event_time'), "yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX"), timestamp_default)
     })
 
+    ## since there are 11000 rows of product_df, we will drop many of these to keep only 4 rows per product
+    ## using dense rank and only keeping ranks 1-4
+    window_spec = Window.partitionBy('product_id').orderBy(col('updated_ts').asc())
+    df_product_ranked = df_product.withColumns({'temp_rank': dense_rank().over(window_spec)})
+    df_product_ranked = df_product_ranked.filter(col('temp_rank') < 5)
+    print(df_product_ranked.count())
+    
+    df_product = df_product_ranked.select('product_id', 'category', 'event_time', 'updated_ts')
+    df_product = df_product.dropDuplicates(subset=['product_id', 'updated_ts'])
     df_product = df_product.to(dim_product_schema)
     return df_product
 
 
 def main():
-    df_event = create_event_df(dataframe_clickstream)
+    #df_event = create_event_df(dataframe_clickstream)
     df_user = create_user_df(dataframe_user)
-    df_date = create_date_df(dataframe_clickstream)
-    df_product = create_product_df(dataframe_clickstream)
+    #df_date = create_date_df(dataframe_clickstream)
+    #df_product = create_product_df(dataframe_clickstream)
 
-    df_event.show(3)
-    #df_user.show(3)
+
+    #df_event.show(3)
+    df_user.show(3)
+    df_user.printSchema()
     #df_date.show(3)
     #df_product.show(3)
-
-    #write_silver_user(df_user)
     
+    write_silver_event(df_event)
+    write_silver_user(df_user)
+    write_silver_date(df_date)
+    wriite_silver_product(df_product)
+
+    df_event = create_event_table(df_event)
 
 if __name__ == '__main__':
     main()

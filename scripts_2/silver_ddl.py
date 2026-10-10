@@ -64,15 +64,44 @@ spark.sql("""
     LOCATION 'file:/Users/ayusman/thisWorks/DE/lakehouse_analytics/spark-warehouse/silver.db/silver_date'
 """)
 
+
 ## create event table
 spark.sql(
     """
     CREATE TABLE IF NOT EXISTS silver_events (
+    event_sk BIGINT GENERATED ALWAYS AS IDENTITY,
+    event_id STRING NOT NULL,
+    event_time    TIMESTAMP NOT NULL,
+    event_date DATE,
+    session_id STRING,
+    device STRING, 
+    price         DOUBLE,
+    quantity      INT,
+    ingestion_ts  TIMESTAMP,
+    ip_file_name  STRING,
 
+    
     ) USING DELTA
     LOCATION 'file:/Users/ayusman/thisWorks/DE/lakehouse_analytics/spark-warehouse/silver.db/silver_events'
 """)
 
+
+"""
+    event_sk      BIGINT GENERATED ALWAYS AS IDENTITY (START WITH 1 INCREMENT BY 1),
+    event_id      STRING    NOT NULL,
+    event_time    TIMESTAMP NOT NULL,
+    event_date    DATE GENERATED ALWAYS AS (CAST(event_time AS DATE)),
+    session_id    STRING    NOT NULL,
+    user_id       STRING    NOT NULL,   
+    product_id    STRING,               
+    event_type    STRING,
+    device        STRING,
+    price         DOUBLE,
+    quantity      INT,
+    ingestion_ts  TIMESTAMP,
+    ip_file_name  STRING
+
+"""    
 
 spark.sql("""
 describe silver_user;
