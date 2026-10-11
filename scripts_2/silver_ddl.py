@@ -32,7 +32,7 @@ spark.sql("""
     effective_to TIMESTAMP,
     is_current BOOLEAN
     ) USING DELTA
-    LOCATION 'file:/Users/ayusman/thisWorks/DE/lakehouse_analytics/spark-warehouse/silver.db/silver_user'
+    LOCATION 'file:/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehouse/silver.db/silver_user'
 """)
 
 ## create product table
@@ -43,7 +43,7 @@ spark.sql("""
     category STRING,
     updated_ts TIMESTAMP
     ) USING DELTA
-    LOCATION 'file:/Users/ayusman/thisWorks/DE/lakehouse_analytics/spark-warehouse/silver.db/silver_product'
+    LOCATION 'file:/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehouse/silver.db/silver_product'
 """)
 
 ## create date table
@@ -61,7 +61,7 @@ spark.sql("""
     day INT,
     is_weekend BOOLEAN
     ) USING DELTA
-    LOCATION 'file:/Users/ayusman/thisWorks/DE/lakehouse_analytics/spark-warehouse/silver.db/silver_date'
+    LOCATION 'file:/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehouse/silver.db/silver_date'
 """)
 
 
@@ -83,10 +83,11 @@ spark.sql(
     ingestion_ts  TIMESTAMP,
     ip_file_name  STRING
     ) USING DELTA
-    LOCATION 'file:/Users/ayusman/thisWorks/DE/lakehouse_analytics/spark-warehouse/silver.db/silver_events'
+    LOCATION 'file:/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehouse/silver.db/silver_events'
 """)
 
 
+#### original events table schema for reference
 """
     event_sk      BIGINT GENERATED ALWAYS AS IDENTITY (START WITH 1 INCREMENT BY 1),
     event_id      STRING    NOT NULL,
