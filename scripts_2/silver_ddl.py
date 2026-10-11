@@ -73,14 +73,15 @@ spark.sql(
     event_id STRING NOT NULL,
     event_time    TIMESTAMP NOT NULL,
     event_date DATE,
+    user_sk STRING,
+    date_key BIGINT,
+    product_sk STRING,
     session_id STRING,
     device STRING, 
     price         DOUBLE,
     quantity      INT,
     ingestion_ts  TIMESTAMP,
-    ip_file_name  STRING,
-
-    
+    ip_file_name  STRING
     ) USING DELTA
     LOCATION 'file:/Users/ayusman/thisWorks/DE/lakehouse_analytics/spark-warehouse/silver.db/silver_events'
 """)
