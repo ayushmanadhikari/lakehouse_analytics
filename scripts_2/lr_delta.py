@@ -3,7 +3,7 @@ from pyspark.sql.functions import *
 
 
 ## reference path for each table of silver layer
-DELTA_TABLE_PATH_EVENT = 'file:/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehouse/silver.db/silver_event'
+DELTA_TABLE_PATH_EVENT = 'file:/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehouse/silver.db/silver_events'
 DELTA_TABLE_PATH_USER = 'file:/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehouse/silver.db/silver_user'
 DELTA_TABLE_PATH_DATE = 'file:/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehouse/silver.db/silver_date'
 DELTA_TABLE_PATH_PRODUCT = 'file:/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehouse/silver.db/silver_product'
@@ -26,7 +26,7 @@ def write_silver_user(dataframe):
     # points the location to an already existing delta table
     spark.sql("""CREATE TABLE IF NOT EXISTS silver.silver_user 
     USING DELTA
-    LOCATION 'file:/Users/ayusman/thisWorks/DE/lakehouse_analytics/spark-warehouse/silver.db/silver_user'
+    LOCATION 'file:/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehouse/silver.db/silver_user'
     """)
     ## we need to ensure idempotency so that same records donot get added.
     ## we will use left_anti join with existing data table 
@@ -45,12 +45,12 @@ def wriite_silver_product(dataframe):
     spark.sql("""CREATE DATABASE IF NOT EXISTS silver;""")
     spark.sql("""CREATE TABLE IF NOT EXISTS silver.silver_product
         USING DELTA
-        LOCATION 'file:/Users/ayusman/thisWorks/DE/lakehouse_analytics/spark-warehouse/silver.db/silver_product'
+        LOCATION 'file:/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehouse/silver.db/silver_product'
         """)
     ## we need to ensure idempotency so that same records donot get added.
     ## we will use left_anti join with existing data table 
     df_product = spark.read.format('delta').load(DELTA_TABLE_PATH_PRODUCT)
-    dataframe = dataframe.join(df_product, on='user_id', how='left_anti')
+    dataframe = dataframe.join(df_product, on='product_id', how='left_anti')
     try:
         #actual write operation
         dataframe.write.format('delta').mode(WRITE_MODE).saveAsTable('silver.silver_product')
@@ -64,11 +64,11 @@ def write_silver_date(dataframe):
     spark.sql("""CREATE DATABASE IF NOT EXISTS silver;""")
     spark.sql("""CREATE TABLE IF NOT EXISTS silver.silver_date
     USING DELTA
-    LOCATION 'file:/Users/ayusman/thisWorks/DE/lakehouse_analytics/spark-warehouse/silver.db/silver_date' 
+    LOCATION 'file:/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehouse/silver.db/silver_date' 
     """)
     ## we will use left_anti join with existing data table 
     df_date = spark.read.format('delta').load(DELTA_TABLE_PATH_DATE)
-    dataframe = dataframe.join(df_date, on='user_id', how='left_anti')
+    dataframe = dataframe.join(df_date, on='full_date', how='left_anti')
     try: 
         dataframe.write.format('delta').mode(WRITE_MODE).saveAsTable('silver.silver_date')
         spark.sql(""" select * from silver.silver_date""").show(2)
@@ -76,18 +76,18 @@ def write_silver_date(dataframe):
         print(f"error: {e}")
 
 
-## writes the user dataframe into delta table silver_event
+## writes the user dataframe into delta table silver_events
 def write_silver_event(dataframe):
     spark.sql("""CREATE DATABASE IF NOT EXISTS silver;""")
-    spark.sql("""CREATE TABLE IF NOT EXISTS silver.silver_event
+    spark.sql("""CREATE TABLE IF NOT EXISTS silver.silver_events
     USING DELTA
-    LOCATION 'file:/Users/ayusman/thisWorks/DE/lakehouse_analytics/spark-warehouse/silver.db/silver_event'
+    LOCATION 'file:/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehouse/silver.db/silver_events'
     """)
     ## we will use left_anti join with existing data table 
     df_event = spark.read.format('delta').load(DELTA_TABLE_PATH_EVENT)
-    dataframe = dataframe.join(df_event, on='user_id', how='left_anti')
+    dataframe = dataframe.join(df_event, on='event_id', how='left_anti')
     try:
-        dataframe.write.format('delta').mode(WRITE_MODE).saveAsTable('silver.silver_event')
-        spark.sql(""" select * from silver.silver_event""").show(2)
+        dataframe.write.format('delta').mode(WRITE_MODE).saveAsTable('silver.silver_events')
+        spark.sql(""" select * from silver.silver_events""").show(2)
     except Exception as e:
         print(f"error: {e}")

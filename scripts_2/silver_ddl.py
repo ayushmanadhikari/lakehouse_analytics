@@ -73,6 +73,7 @@ spark.sql(
     event_id STRING NOT NULL,
     event_time    TIMESTAMP NOT NULL,
     event_date DATE,
+    event_type STRING,
     user_sk STRING,
     date_key BIGINT,
     product_sk STRING,
@@ -86,6 +87,10 @@ spark.sql(
     LOCATION 'file:/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehouse/silver.db/silver_events'
 """)
 
+## probabale kpis: 1. highest selling product, highest selling month, weekday, highest purchasing users(top 50),
+# 1. average sales per week, month, quarter 2. average sale per user
+# 1. most sold product, categort 2. 
+#  
 
 #### original events table schema for reference
 """
@@ -110,7 +115,7 @@ describe silver_user;
 """).show()
 
 spark.sql("""
-select * from silver_user;
+select * from silver_events;
 """).show()
 
 

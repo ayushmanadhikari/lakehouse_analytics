@@ -12,9 +12,9 @@ READ_PATH_CLICKSTREAM = '/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehou
 READ_PATH_USER = '/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehouse/bronze/bronze_user'
 
 ## readpaths from silver layer. needs these paths while joining with fact table to get the surrogate keys generated during insertion
-READ_PATH_USER_SILVER = '/Users/ayusman/thisWorks/DE/lakehouse_analytics/spark-warehouse/silver.db/silver_user'
-READ_PATH_DATE_SILVER = '/Users/ayusman/thisWorks/DE/lakehouse_analytics/spark-warehouse/silver.db/silver_date'
-READ_PATH_PRODUCT_SILVER = '/Users/ayusman/thisWorks/DE/lakehouse_analytics/spark-warehouse/silver.db/silver_product'
+READ_PATH_USER_SILVER = '/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehouse/silver.db/silver_user'
+READ_PATH_DATE_SILVER = '/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehouse/silver.db/silver_date'
+READ_PATH_PRODUCT_SILVER = '/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehouse/silver.db/silver_product'
 
 
 DEFAULT_TIMESTAMP = dt(1970, 1, 1, 0, 0, 0, 0, tzinfo=datetime.timezone.utc)
@@ -78,7 +78,7 @@ def handle_nulls(dataframe):
     # dropping for user_id, event_time, session_id
     df = df.dropna(how='any', subset=['user_id', 'event_time', 'session_id'])
     ## handle NULLs, negatives and 0 in quantity as per event_type
-    df = df.filter(~((col('event_type').isin('add_to_cart', 'purchase', 'checkout')) & (col('quantity') <= 0) & (col('quantity').isNull())))
+    df = df.filter(~((col('event_type').isin('add_to_cart', 'purchase', 'checkout')) & (col('quantity') <= 0) | (col('quantity').isNull())))
     ## handling null product per event_type
     df = df.filter(~((col('event_type').isin('add_to_cart', 'purchase', 'checkout')) & (col('product_id').isNull())))
     # checking null counts accross all columns
@@ -145,7 +145,7 @@ def create_event_table(df_event):
         'date_key': coalesce(col('date_key'), lit('-1')),
         'product_sk': coalesce(col('product_sk'), lit('-1'))
     })
-    df_event = df_event.select('event_id', 'event_time', 'event_date', 'event_type', 'session_id', 'device', 'price', 'quantity', 'ingestion_ts', 'ip_file_name', 'user_sk', 'product_sk', 'date_key')
+    df_event = df_event.select('event_id', 'event_time', 'event_date', 'event_type', 'user_sk', 'date_key', 'product_sk', 'session_id', 'device', 'price', 'quantity', 'ingestion_ts', 'ip_file_name')
     df_event.show(5)
     print(df_event.count())
     return df_event
@@ -274,24 +274,29 @@ def create_product_df(dataframe):
 
 
 def main():
-    #df_event = create_event_df(dataframe_clickstream)
+    ## creates the respective dataframes for user, product, date and events
+    df_event = create_event_df(dataframe_clickstream)
     df_user = create_user_df(dataframe_user)
-    #df_date = create_date_df(dataframe_clickstream)
-    #df_product = create_product_df(dataframe_clickstream)
+    df_date = create_date_df(dataframe_clickstream)
+    df_product = create_product_df(dataframe_clickstream)
 
 
-    #df_event.show(3)
+    # displays the dataframes after passing through their respective create_datafrane functions
+    df_event.show(3)
     df_user.show(3)
     df_user.printSchema()
-    #df_date.show(3)
-    #df_product.show(3)
+    df_date.show(3)
+    df_product.show(3)
+
     
-    write_silver_event(df_event)
     write_silver_user(df_user)
     write_silver_date(df_date)
     wriite_silver_product(df_product)
 
-    df_event = create_event_table(df_event)
+    ## need to perform join with other dimension tables, so we created another function called create_event_table which ensures schema match with the delta table
+    event_table = create_event_table(df_event)
+    write_silver_event(event_table)
+    
 
 if __name__ == '__main__':
     main()
