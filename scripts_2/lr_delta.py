@@ -23,7 +23,7 @@ WRITE_MODE = 'append'
 def write_silver_user(dataframe):
     # creates database if it doesn't exists. Since it recognized the db folder, maybe due to extension(.db). But it definitely fails to recognize the silver_user folder as a Delta Table.
     spark.sql("""CREATE DATABASE IF NOT EXISTS silver;""")
-    # points the location to an already existing delta table
+    # points the location to an already existing delta table. creates the table if it doesn't find the table at the specified location
     spark.sql("""CREATE TABLE IF NOT EXISTS silver.silver_user 
     USING DELTA
     LOCATION 'file:/Users/ayusman/thisWorks/DE/lakehouse_analytics/lakehouse/silver.db/silver_user'
